@@ -114,6 +114,31 @@ h1, h2, h3 { font-family: 'Fredoka', sans-serif; color: var(--ink); letter-spaci
 [data-testid="stSidebar"] h2 { color: var(--pitch-dark); }
 
 @media (prefers-reduced-motion: reduce) { .scoreboard .ball { animation: none; } }
+
+/* ---------- Mobile tuning ---------- */
+@media (max-width: 640px) {
+  .block-container { padding: 1rem .6rem 2.5rem !important; }
+
+  /* stat rows: wrap to 2 cards per row instead of cramming all across */
+  [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 8px !important; }
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    flex: 1 1 46% !important; min-width: 44% !important; width: auto !important;
+  }
+
+  [data-testid="stMetric"] { padding: 10px 12px; }
+  [data-testid="stMetricValue"] { font-size: 1.45rem; }
+  [data-testid="stMetricLabel"] p { font-size: .74rem; }
+
+  .scoreboard { padding: 18px 16px; border-radius: 20px; }
+  .scoreboard .title { font-size: 24px; }
+  .scoreboard::after { width: 82px; height: 82px; }
+
+  .nextcard { flex-direction: column; align-items: flex-start; gap: 6px; }
+
+  /* full-width, easy-to-tap buttons */
+  .stButton > button, .stDownloadButton > button { width: 100%; }
+}
 """
 st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 
@@ -357,6 +382,48 @@ if not upcoming.empty:
         unsafe_allow_html=True,
     )
 
+# Quick score entry — phone friendly, no sideways scrolling
+with st.expander("⚡ Quick score entry", expanded=True):
+    st.caption("The easy way on a phone — pick the match, type the two scores, Save.")
+    q_df = df.sort_values("Round").reset_index(drop=True)
+    q_played = q_df.apply(has_result, axis=1)
+    q_options = q_df["Round"].tolist()
+
+    def q_label(rd):
+        row = q_df[q_df["Round"] == rd].iloc[0]
+        tag = ""
+        if has_result(row):
+            tag = f' ✓ {int(row["Goals For"])}\u2013{int(row["Goals Against"])}'
+        return f'Round {int(rd)} · {row["Home/Away"]} vs {row["Opponent"]}{tag}'
+
+    unplayed = q_df.loc[~q_played, "Round"].tolist()
+    q_default = q_options.index(unplayed[0]) if unplayed else 0
+    chosen = st.selectbox(
+        "Which match?", q_options, index=q_default,
+        format_func=q_label, key="quick_round",
+    )
+    crow = q_df[q_df["Round"] == chosen].iloc[0]
+    st.caption(f'📅 {fmt_date(crow["Date"])} · ⏰ {crow["Time"]} · 📍 {crow["Ground"]}')
+    cur_gf = int(crow["Goals For"]) if pd.notna(crow["Goals For"]) else 0
+    cur_ga = int(crow["Goals Against"]) if pd.notna(crow["Goals Against"]) else 0
+
+    with st.form("quick_entry"):
+        qc = st.columns(2)
+        gf_in = qc[0].number_input("Our goals ⚽", min_value=0, step=1, value=cur_gf)
+        ga_in = qc[1].number_input("Their goals 🥅", min_value=0, step=1, value=cur_ga)
+        if st.form_submit_button("💾 Save this score", type="primary", use_container_width=True):
+            mask = df["Round"] == chosen
+            df.loc[mask, "Goals For"] = gf_in
+            df.loc[mask, "Goals Against"] = ga_in
+            save_data(df)
+            # jump to the next unplayed match for the next entry
+            for r in q_options:
+                if not has_result(df[df["Round"] == r].iloc[0]):
+                    st.session_state["quick_round"] = r
+                    break
+            st.session_state["just_saved"] = True
+            st.rerun()
+
 # Editable fixtures + results
 st.subheader("📋 Fixtures & results")
 st.caption("For each match, type how many goals each team scored, then press Save. "
@@ -371,6 +438,10 @@ edited = st.data_editor(
     hide_index=True,
     num_rows="dynamic",
     key="editor",
+    column_order=[
+        "Round", "Date", "Opponent", "Goals For", "Goals Against",
+        "Snacks", "Home/Away", "Time", "Ground",
+    ],
     column_config={
         "Round": st.column_config.NumberColumn("Round", width="small", disabled=True),
         "Date": st.column_config.DateColumn("Date", format="DD MMM YYYY", width="medium"),
