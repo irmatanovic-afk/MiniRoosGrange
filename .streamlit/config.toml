@@ -1,0 +1,14 @@
+[theme]
+base = "light"
+primaryColor = "#2faa5a"
+backgroundColor = "#f3faf4"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#143a26"
+ 
+# Insurance: if a viewer's phone is in dark mode, use the SAME light palette
+# so the app never flips to dark.
+[theme.dark]
+primaryColor = "#2faa5a"
+backgroundColor = "#f3faf4"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#143a26"
