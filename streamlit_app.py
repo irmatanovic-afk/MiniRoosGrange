@@ -83,18 +83,22 @@ h1, h2, h3 { font-family: 'Fredoka', sans-serif; color: var(--ink); letter-spaci
 [data-testid="stMetricLabel"] p { font-weight: 800; color: var(--ink); }
 
 /* ---------- Buttons ---------- */
-.stButton > button, .stDownloadButton > button {
+.stButton > button, .stDownloadButton > button, .stFormSubmitButton > button {
   font-family: 'Fredoka', sans-serif; font-weight: 600;
   background: var(--pitch); color: #fff; border: none; border-radius: 999px;
   padding: .5rem 1.3rem; box-shadow: 0 5px 0 var(--pitch-dark);
   transition: transform .08s ease, box-shadow .08s ease;
 }
-.stButton > button:hover, .stDownloadButton > button:hover {
+.stButton > button:hover, .stDownloadButton > button:hover, .stFormSubmitButton > button:hover {
   background: var(--pitch-dark); color: #fff; transform: translateY(1px); box-shadow: 0 4px 0 #155c30;
 }
-.stButton > button:active, .stDownloadButton > button:active { transform: translateY(4px); box-shadow: 0 1px 0 #155c30; }
-.stButton > button[kind="primary"] { background: var(--sun); color: #5a3d00; box-shadow: 0 5px 0 #d9a400; }
-.stButton > button[kind="primary"]:hover { background: #ffce26; color: #5a3d00; box-shadow: 0 4px 0 #d9a400; }
+.stButton > button:active, .stDownloadButton > button:active, .stFormSubmitButton > button:active { transform: translateY(4px); box-shadow: 0 1px 0 #155c30; }
+.stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] { background: var(--sun); color: #5a3d00; box-shadow: 0 5px 0 #d9a400; }
+.stButton > button[kind="primary"]:hover, .stFormSubmitButton > button[kind="primary"]:hover { background: #ffce26; color: #5a3d00; box-shadow: 0 4px 0 #d9a400; }
+
+/* ---------- Expander (quick entry) ---------- */
+[data-testid="stExpander"] { border-radius: 16px; border: 2px solid #d8efe0; overflow: hidden; }
+[data-testid="stExpander"] summary { font-family: 'Fredoka', sans-serif; color: var(--ink); }
 
 /* ---------- Next-match card ---------- */
 .nextcard {
