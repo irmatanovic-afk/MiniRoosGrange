@@ -122,7 +122,7 @@ WORKSHEET = "matches"  # the tab name inside your Google Sheet
 
 COLUMNS = [
     "Round", "Date", "Time", "Ground", "Home/Away", "Opponent",
-    "Goals For", "Goals Against", "Player Goals", "Notes",
+    "Goals For", "Goals Against", "Notes", "Snacks",
 ]
 
 # Fixtures read from the Football SA schedule photo.
@@ -157,8 +157,7 @@ def seed_frame():
         rows.append({
             "Round": r[0], "Date": r[1], "Time": r[2], "Ground": r[3],
             "Home/Away": r[4], "Opponent": r[5],
-            "Goals For": None, "Goals Against": None,
-            "Player Goals": None, "Notes": "",
+            "Goals For": None, "Goals Against": None, "Notes": "", "Snacks": "",
         })
     return pd.DataFrame(rows, columns=COLUMNS)
 
@@ -192,9 +191,10 @@ def normalize(df):
     if df.empty:
         return seed_frame()
     df["Round"] = pd.to_numeric(df["Round"], errors="coerce")
-    for col in ["Goals For", "Goals Against", "Player Goals"]:
+    for col in ["Goals For", "Goals Against"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df["Notes"] = df["Notes"].fillna("")
+    df["Snacks"] = df["Snacks"].fillna("")
     return df
 
 
@@ -230,7 +230,13 @@ def load_data():
 
 
 def save_data(df):
-    out = df[COLUMNS].copy()
+    out = df.copy()
+    for col in COLUMNS:
+        if col not in out.columns:
+            out[col] = None
+    out = out[COLUMNS].copy()
+    out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    out["Date"] = out["Date"].where(out["Date"].notna(), "")
     if USE_GSHEETS:
         conn.update(worksheet=WORKSHEET, data=out)
     else:
@@ -290,7 +296,6 @@ def longest_run(seq, kinds):
 with st.sidebar:
     st.header("⚽ Team setup")
     team_name = st.text_input("Team name", value="USC Lion U6 Joeys (Blue)")
-    player_name = st.text_input("Player name", value="my son")
     st.divider()
     if USE_GSHEETS:
         st.success("Saving to Google Sheets ✓")
@@ -315,6 +320,8 @@ df = load_data()
 if st.session_state.pop("just_saved", False):
     st.success("Saved! 🎉")
     st.balloons()
+if st.session_state.pop("rota_done", False):
+    st.success("Rota updated! 🍊")
 
 results = df.apply(result_label, axis=1)
 played_mask = df.apply(has_result, axis=1)
@@ -326,26 +333,28 @@ draws = int((results == "Draw").sum())
 losses = int((results == "Loss").sum())
 gf_total = int(df.loc[played_mask, "Goals For"].sum()) if played else 0
 ga_total = int(df.loc[played_mask, "Goals Against"].sum()) if played else 0
-pg_total = int(df["Player Goals"].fillna(0).sum())
 
 cols = st.columns(6)
 cols[0].metric("Played", f"{played}/{len(df)}")
 cols[1].metric("Wins 🏆", wins)
 cols[2].metric("Draws 🤝", draws)
 cols[3].metric("Losses", losses)
-cols[4].metric("Goals ⚽", f"{gf_total}\u2013{ga_total}")
-cols[5].metric(f"{player_name.title()}'s goals ⚽", pg_total)
+cols[4].metric("Our goals ⚽", gf_total)
+cols[5].metric("Their goals 🥅", ga_total)
 
 # Next match
 upcoming = df[~played_mask].sort_values(["Date", "Time"])
 if not upcoming.empty:
     nx = upcoming.iloc[0]
+    snack = str(nx.get("Snacks", "") or "").strip()
+    snack_html = f'<div class="meta">🍊 Snacks: <b>{snack}</b></div>' if snack else ""
     st.markdown(
         f"""
         <div class="nextcard">
           <div class="pill">Next up · Round {int(nx['Round'])}</div>
           <div class="vs">{nx['Home/Away']} vs <b>{nx['Opponent']}</b></div>
           <div class="meta">📅 {fmt_date(nx['Date'])} &nbsp;·&nbsp; ⏰ {nx['Time']} &nbsp;·&nbsp; 📍 {nx['Ground']}</div>
+          {snack_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -353,27 +362,40 @@ if not upcoming.empty:
 
 # Editable fixtures + results
 st.subheader("📋 Fixtures & results")
-st.caption("Fill in Goals For / Goals Against (and your son's goals), then click Save. "
-           "You can also fix any opponent names here.")
+st.caption("For each match, type how many goals each team scored, then press Save. "
+           "You can also fix an opponent's name right here.")
+
+edit_view = df.sort_values("Round").reset_index(drop=True).copy()
+edit_view["Date"] = pd.to_datetime(edit_view["Date"], errors="coerce")
+
 edited = st.data_editor(
-    df.sort_values("Round").reset_index(drop=True),
+    edit_view,
     use_container_width=True,
     hide_index=True,
     num_rows="dynamic",
     key="editor",
     column_config={
-        "Round": st.column_config.NumberColumn("Rd", width="small", disabled=True),
-        "Date": st.column_config.TextColumn("Date"),
+        "Round": st.column_config.NumberColumn("Round", width="small", disabled=True),
+        "Date": st.column_config.DateColumn("Date", format="DD MMM YYYY", width="medium"),
         "Time": st.column_config.TextColumn("Time", width="small"),
-        "Ground": st.column_config.TextColumn("Ground"),
+        "Ground": st.column_config.TextColumn("Ground", width="medium"),
         "Home/Away": st.column_config.SelectboxColumn(
-            "H/A", options=["Home", "Away", "Neutral"], width="small"
+            "Home / Away", options=["Home", "Away", "Neutral"], width="small"
         ),
-        "Opponent": st.column_config.TextColumn("Opponent"),
-        "Goals For": st.column_config.NumberColumn("GF", min_value=0, step=1, width="small"),
-        "Goals Against": st.column_config.NumberColumn("GA", min_value=0, step=1, width="small"),
-        "Player Goals": st.column_config.NumberColumn("Son ⚽", min_value=0, step=1, width="small"),
+        "Opponent": st.column_config.TextColumn("Opponent", width="medium"),
+        "Goals For": st.column_config.NumberColumn(
+            "Our goals ⚽", min_value=0, step=1,
+            help="Goals scored by your team in this match",
+        ),
+        "Goals Against": st.column_config.NumberColumn(
+            "Their goals 🥅", min_value=0, step=1,
+            help="Goals scored by the other team in this match",
+        ),
         "Notes": st.column_config.TextColumn("Notes", width="large"),
+        "Snacks": st.column_config.TextColumn(
+            "🍊 Snacks", width="medium",
+            help="Who's bringing the oranges/snacks this week",
+        ),
     },
 )
 
@@ -382,20 +404,73 @@ if st.button("💾 Save results", type="primary"):
     st.session_state["just_saved"] = True
     st.rerun()
 
+# Oranges & snacks rota
+st.subheader("🍊 Oranges & snacks rota")
+st.caption("Who's bringing the half-time oranges and snacks each week.")
+
+existing_helpers = [s for s in dict.fromkeys(df["Snacks"].astype(str)) if s.strip()]
+with st.expander("Auto-fill the rota from a list of families", expanded=not existing_helpers):
+    helpers_text = st.text_area(
+        "Helper families — one per line. They'll take turns in this order across the season.",
+        value="\n".join(existing_helpers),
+        height=130,
+        placeholder="The Smiths\nThe Patels\nThe Nguyens\n...",
+    )
+    replace = st.checkbox("Also replace weeks that already have someone assigned", value=False)
+    if st.button("🍊 Fill in the rota"):
+        helpers = [h.strip() for h in helpers_text.splitlines() if h.strip()]
+        if not helpers:
+            st.warning("Add at least one family above first.")
+        else:
+            new_df = df.sort_values("Round").reset_index(drop=True).copy()
+            for i, idx in enumerate(new_df.index):
+                current = str(new_df.at[idx, "Snacks"] or "").strip()
+                if replace or not current:
+                    new_df.at[idx, "Snacks"] = helpers[i % len(helpers)]
+            save_data(new_df)
+            st.session_state["rota_done"] = True
+            st.rerun()
+
+rota_view = df.sort_values("Round").copy()
+rota_view["When"] = rota_view["Date"].map(fmt_date)
+rota_view["Match"] = rota_view["Home/Away"] + " vs " + rota_view["Opponent"].astype(str)
+st.dataframe(
+    rota_view[["Round", "When", "Match", "Snacks"]],
+    hide_index=True,
+    use_container_width=True,
+    column_config={
+        "Round": st.column_config.NumberColumn("Round", width="small"),
+        "When": st.column_config.TextColumn("Date", width="medium"),
+        "Match": st.column_config.TextColumn("Match", width="large"),
+        "Snacks": st.column_config.TextColumn("🍊 On snacks", width="medium"),
+    },
+)
+st.caption("To change one week, edit the 🍊 Snacks column in the Fixtures & results table above, then press Save.")
+
 # Results so far + chart
 done = df[played_mask].copy()
 if not done.empty:
     done["Score"] = done.apply(
         lambda r: f'{int(r["Goals For"])}\u2013{int(r["Goals Against"])}', axis=1
     )
-    done["Result"] = results[played_mask].values
+    res_emoji = {"Win": "✅ Win", "Draw": "🤝 Draw", "Loss": "❌ Loss"}
+    done["Result"] = [res_emoji.get(x, x) for x in results[played_mask].values]
     done["When"] = done["Date"].map(fmt_date)
 
     st.subheader("📊 Results so far")
     st.dataframe(
-        done[["Round", "When", "Home/Away", "Opponent", "Score", "Result", "Player Goals", "Notes"]],
+        done[["Round", "When", "Home/Away", "Opponent", "Score", "Result", "Notes"]],
         hide_index=True,
         use_container_width=True,
+        column_config={
+            "Round": st.column_config.NumberColumn("Round", width="small"),
+            "When": st.column_config.TextColumn("Date", width="medium"),
+            "Home/Away": st.column_config.TextColumn("Home / Away", width="small"),
+            "Opponent": st.column_config.TextColumn("Opponent", width="medium"),
+            "Score": st.column_config.TextColumn("Score (us–them)", width="small"),
+            "Result": st.column_config.TextColumn("Result", width="small"),
+            "Notes": st.column_config.TextColumn("Notes", width="large"),
+        },
     )
 
     st.subheader("🥅 Goals by round")
@@ -422,14 +497,14 @@ if not played_df.empty:
         res = [result_label(r) for _, r in g.iterrows()]
         rows.append({
             "Opponent": opp,
-            "P": len(g),
-            "W": res.count("Win"),
-            "D": res.count("Draw"),
-            "L": res.count("Loss"),
-            "GF": int(g["Goals For"].sum()),
-            "GA": int(g["Goals Against"].sum()),
+            "Played": len(g),
+            "Won": res.count("Win"),
+            "Drawn": res.count("Draw"),
+            "Lost": res.count("Loss"),
+            "Our goals": int(g["Goals For"].sum()),
+            "Their goals": int(g["Goals Against"].sum()),
         })
-    h2h = pd.DataFrame(rows).sort_values(["W", "GF"], ascending=False)
+    h2h = pd.DataFrame(rows).sort_values(["Won", "Our goals"], ascending=False)
     st.dataframe(h2h, hide_index=True, use_container_width=True)
 
 st.download_button(
