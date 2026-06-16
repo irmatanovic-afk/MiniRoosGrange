@@ -122,7 +122,7 @@ WORKSHEET = "matches"  # the tab name inside your Google Sheet
 
 COLUMNS = [
     "Round", "Date", "Time", "Ground", "Home/Away", "Opponent",
-    "Goals For", "Goals Against", "Notes", "Snacks",
+    "Goals For", "Goals Against", "Snacks",
 ]
 
 # Fixtures read from the Football SA schedule photo.
@@ -157,7 +157,7 @@ def seed_frame():
         rows.append({
             "Round": r[0], "Date": r[1], "Time": r[2], "Ground": r[3],
             "Home/Away": r[4], "Opponent": r[5],
-            "Goals For": None, "Goals Against": None, "Notes": "", "Snacks": "",
+            "Goals For": None, "Goals Against": None, "Snacks": "",
         })
     return pd.DataFrame(rows, columns=COLUMNS)
 
@@ -193,7 +193,6 @@ def normalize(df):
     df["Round"] = pd.to_numeric(df["Round"], errors="coerce")
     for col in ["Goals For", "Goals Against"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
-    df["Notes"] = df["Notes"].fillna("")
     df["Snacks"] = df["Snacks"].fillna("")
     return df
 
@@ -320,8 +319,6 @@ df = load_data()
 if st.session_state.pop("just_saved", False):
     st.success("Saved! 🎉")
     st.balloons()
-if st.session_state.pop("rota_done", False):
-    st.success("Rota updated! 🍊")
 
 results = df.apply(result_label, axis=1)
 played_mask = df.apply(has_result, axis=1)
@@ -391,7 +388,6 @@ edited = st.data_editor(
             "Their goals 🥅", min_value=0, step=1,
             help="Goals scored by the other team in this match",
         ),
-        "Notes": st.column_config.TextColumn("Notes", width="large"),
         "Snacks": st.column_config.TextColumn(
             "🍊 Snacks", width="medium",
             help="Who's bringing the oranges/snacks this week",
@@ -403,49 +399,6 @@ if st.button("💾 Save results", type="primary"):
     save_data(edited)
     st.session_state["just_saved"] = True
     st.rerun()
-
-# Oranges & snacks rota
-st.subheader("🍊 Oranges & snacks rota")
-st.caption("Who's bringing the half-time oranges and snacks each week.")
-
-existing_helpers = [s for s in dict.fromkeys(df["Snacks"].astype(str)) if s.strip()]
-with st.expander("Auto-fill the rota from a list of families", expanded=not existing_helpers):
-    helpers_text = st.text_area(
-        "Helper families — one per line. They'll take turns in this order across the season.",
-        value="\n".join(existing_helpers),
-        height=130,
-        placeholder="The Smiths\nThe Patels\nThe Nguyens\n...",
-    )
-    replace = st.checkbox("Also replace weeks that already have someone assigned", value=False)
-    if st.button("🍊 Fill in the rota"):
-        helpers = [h.strip() for h in helpers_text.splitlines() if h.strip()]
-        if not helpers:
-            st.warning("Add at least one family above first.")
-        else:
-            new_df = df.sort_values("Round").reset_index(drop=True).copy()
-            for i, idx in enumerate(new_df.index):
-                current = str(new_df.at[idx, "Snacks"] or "").strip()
-                if replace or not current:
-                    new_df.at[idx, "Snacks"] = helpers[i % len(helpers)]
-            save_data(new_df)
-            st.session_state["rota_done"] = True
-            st.rerun()
-
-rota_view = df.sort_values("Round").copy()
-rota_view["When"] = rota_view["Date"].map(fmt_date)
-rota_view["Match"] = rota_view["Home/Away"] + " vs " + rota_view["Opponent"].astype(str)
-st.dataframe(
-    rota_view[["Round", "When", "Match", "Snacks"]],
-    hide_index=True,
-    use_container_width=True,
-    column_config={
-        "Round": st.column_config.NumberColumn("Round", width="small"),
-        "When": st.column_config.TextColumn("Date", width="medium"),
-        "Match": st.column_config.TextColumn("Match", width="large"),
-        "Snacks": st.column_config.TextColumn("🍊 On snacks", width="medium"),
-    },
-)
-st.caption("To change one week, edit the 🍊 Snacks column in the Fixtures & results table above, then press Save.")
 
 # Results so far + chart
 done = df[played_mask].copy()
@@ -459,7 +412,7 @@ if not done.empty:
 
     st.subheader("📊 Results so far")
     st.dataframe(
-        done[["Round", "When", "Home/Away", "Opponent", "Score", "Result", "Notes"]],
+        done[["Round", "When", "Home/Away", "Opponent", "Score", "Result"]],
         hide_index=True,
         use_container_width=True,
         column_config={
@@ -469,7 +422,6 @@ if not done.empty:
             "Opponent": st.column_config.TextColumn("Opponent", width="medium"),
             "Score": st.column_config.TextColumn("Score (us–them)", width="small"),
             "Result": st.column_config.TextColumn("Result", width="small"),
-            "Notes": st.column_config.TextColumn("Notes", width="large"),
         },
     )
 
