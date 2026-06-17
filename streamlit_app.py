@@ -369,7 +369,7 @@ cols[4].metric("Our goals ⚽", gf_total)
 cols[5].metric("Their goals 🥅", ga_total)
 
 # Next match
-upcoming = df[~played_mask].sort_values(["Date", "Time"])
+upcoming = df[~played_mask].sort_values("Round")
 if not upcoming.empty:
     nx = upcoming.iloc[0]
     snack = str(nx.get("Snacks", "") or "").strip()
