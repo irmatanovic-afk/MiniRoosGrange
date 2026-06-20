@@ -229,14 +229,18 @@ def normalize(df):
 def load_data():
     if USE_GSHEETS:
         try:
-            raw = conn.read(worksheet=WORKSHEET, ttl=0)
+            raw = conn.read(worksheet=WORKSHEET, ttl=10)
         except Exception:
-            raw = None
-        empty = raw is None or (hasattr(raw, "dropna") and raw.dropna(how="all").empty)
-        if empty:
+            st.error(
+                "Couldn't reach the Google Sheet just now — it may be busy or "
+                "rate-limited. Wait a few seconds and refresh the page."
+            )
+            st.stop()
+        if raw is None or raw.dropna(how="all").empty:
             df = seed_frame()
             try:
                 conn.update(worksheet=WORKSHEET, data=df)
+                st.cache_data.clear()
             except Exception as e:
                 st.warning(f"Couldn't initialise the Google Sheet tab '{WORKSHEET}': {e}")
             return df
@@ -267,6 +271,7 @@ def save_data(df):
     out["Date"] = out["Date"].where(out["Date"].notna(), "")
     if USE_GSHEETS:
         conn.update(worksheet=WORKSHEET, data=out)
+        st.cache_data.clear()
     else:
         out.to_csv(DATA_FILE, index=False)
 
