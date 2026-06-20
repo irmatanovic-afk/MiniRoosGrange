@@ -348,6 +348,8 @@ df = load_data()
 if st.session_state.pop("just_saved", False):
     st.success("Saved! 🎉")
     st.balloons()
+if st.session_state.pop("snacks_saved", False):
+    st.success("Snacks updated! 🍊")
 
 results = df.apply(result_label, axis=1)
 played_mask = df.apply(has_result, axis=1)
@@ -386,6 +388,18 @@ if not upcoming.empty:
         unsafe_allow_html=True,
     )
 
+    with st.form("snacks_form"):
+        new_snacks = st.text_input(
+            f"🍊 Who's bringing snacks for Round {int(nx['Round'])}?",
+            value=str(nx.get("Snacks", "") or ""),
+            placeholder="e.g. The Smiths",
+        )
+        if st.form_submit_button("Save snacks"):
+            df.loc[df["Round"] == nx["Round"], "Snacks"] = new_snacks.strip()
+            save_data(df)
+            st.session_state["snacks_saved"] = True
+            st.rerun()
+
 # Quick score entry — phone friendly, no sideways scrolling
 with st.expander("⚡ Quick score entry", expanded=True):
     st.caption("The easy way on a phone — pick the match, type the two scores, Save.")
@@ -420,60 +434,8 @@ with st.expander("⚡ Quick score entry", expanded=True):
             df.loc[mask, "Goals For"] = gf_in
             df.loc[mask, "Goals Against"] = ga_in
             save_data(df)
-            # jump to the next unplayed match for the next entry
-            for r in q_options:
-                if not has_result(df[df["Round"] == r].iloc[0]):
-                    st.session_state["quick_round"] = r
-                    break
             st.session_state["just_saved"] = True
             st.rerun()
-
-# Editable fixtures + results
-st.subheader("📋 Fixtures & results")
-st.caption("For each match, type how many goals each team scored, then press Save. "
-           "You can also fix an opponent's name right here.")
-
-edit_view = df.sort_values("Round").reset_index(drop=True).copy()
-edit_view["Date"] = pd.to_datetime(edit_view["Date"], errors="coerce")
-
-edited = st.data_editor(
-    edit_view,
-    use_container_width=True,
-    hide_index=True,
-    num_rows="dynamic",
-    key="editor",
-    column_order=[
-        "Round", "Date", "Opponent", "Goals For", "Goals Against",
-        "Snacks", "Home/Away", "Time", "Ground",
-    ],
-    column_config={
-        "Round": st.column_config.NumberColumn("Round", width="small", disabled=True),
-        "Date": st.column_config.DateColumn("Date", format="DD MMM YYYY", width="medium"),
-        "Time": st.column_config.TextColumn("Time", width="small"),
-        "Ground": st.column_config.TextColumn("Ground", width="medium"),
-        "Home/Away": st.column_config.SelectboxColumn(
-            "Home / Away", options=["Home", "Away", "Neutral"], width="small"
-        ),
-        "Opponent": st.column_config.TextColumn("Opponent", width="medium"),
-        "Goals For": st.column_config.NumberColumn(
-            "Our goals ⚽", min_value=0, step=1,
-            help="Goals scored by your team in this match",
-        ),
-        "Goals Against": st.column_config.NumberColumn(
-            "Their goals 🥅", min_value=0, step=1,
-            help="Goals scored by the other team in this match",
-        ),
-        "Snacks": st.column_config.TextColumn(
-            "🍊 Snacks", width="medium",
-            help="Who's bringing the oranges/snacks this week",
-        ),
-    },
-)
-
-if st.button("💾 Save results", type="primary"):
-    save_data(edited)
-    st.session_state["just_saved"] = True
-    st.rerun()
 
 # Results so far + chart
 done = df[played_mask].copy()
