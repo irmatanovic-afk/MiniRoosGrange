@@ -100,18 +100,22 @@ h1, h2, h3 { font-family: 'Fredoka', sans-serif; color: var(--ink); letter-spaci
 [data-testid="stExpander"] { border-radius: 16px; border: 2px solid #d8efe0; overflow: hidden; }
 [data-testid="stExpander"] summary { font-family: 'Fredoka', sans-serif; color: var(--ink); }
 
-/* ---------- Next-match card ---------- */
-.nextcard {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
-  background: #fff; border: 3px dashed var(--sky); border-radius: 20px;
-  padding: 14px 18px; margin: 4px 0 8px; box-shadow: 0 6px 16px rgba(20,58,38,.07);
+/* ---------- Next-match card (bordered container) ---------- */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: #fff;
+  border: 3px dashed var(--sky) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 6px 16px rgba(20,58,38,.07);
 }
-.nextcard .pill {
+.nextcard-inner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.nextcard-inner .pill {
   background: var(--sky); color: #063b56; font-family: 'Fredoka', sans-serif; font-weight: 700;
   padding: 6px 12px; border-radius: 999px; white-space: nowrap;
 }
-.nextcard .vs { font-family: 'Fredoka', sans-serif; font-size: 19px; color: var(--ink); }
-.nextcard .meta { color: #4d6a59; font-weight: 700; font-size: 14px; }
+.nextcard-inner .vs { font-family: 'Fredoka', sans-serif; font-size: 19px; color: var(--ink); }
+.nextcard-inner .meta { color: #4d6a59; font-weight: 700; font-size: 14px; flex-basis: 100%; }
 
 /* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] { background: #ffffff; border-right: 3px solid #e4f3e8; }
@@ -138,7 +142,7 @@ h1, h2, h3 { font-family: 'Fredoka', sans-serif; color: var(--ink); letter-spaci
   .scoreboard .title { font-size: 24px; }
   .scoreboard::after { width: 82px; height: 82px; }
 
-  .nextcard { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .nextcard-inner { gap: 6px; }
 
   /* full-width, easy-to-tap buttons */
   .stButton > button, .stDownloadButton > button { width: 100%; }
@@ -379,31 +383,28 @@ cols[5].metric("Their goals 🥅", ga_total)
 upcoming = df[~played_mask].sort_values("Round")
 if not upcoming.empty:
     nx = upcoming.iloc[0]
-    snack = str(nx.get("Snacks", "") or "").strip()
-    snack_html = f'<div class="meta">🍊 Snacks: <b>{snack}</b></div>' if snack else ""
-    st.markdown(
-        f"""
-        <div class="nextcard">
-          <div class="pill">Next up · Round {int(nx['Round'])}</div>
-          <div class="vs">{nx['Home/Away']} vs <b>{nx['Opponent']}</b></div>
-          <div class="meta">📅 {fmt_date(nx['Date'])} &nbsp;·&nbsp; ⏰ {nx['Time']} &nbsp;·&nbsp; 📍 {nx['Ground']}</div>
-          {snack_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    with st.form("snacks_form"):
-        new_snacks = st.text_input(
-            f"🍊 Who's bringing snacks for Round {int(nx['Round'])}?",
-            value=str(nx.get("Snacks", "") or ""),
-            placeholder="e.g. The Smiths",
+    with st.container(border=True):
+        st.markdown(
+            f"""
+            <div class="nextcard-inner">
+              <div class="pill">Next up · Round {int(nx['Round'])}</div>
+              <div class="vs">{nx['Home/Away']} vs <b>{nx['Opponent']}</b></div>
+              <div class="meta">📅 {fmt_date(nx['Date'])} &nbsp;·&nbsp; ⏰ {nx['Time']} &nbsp;·&nbsp; 📍 {nx['Ground']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        if st.form_submit_button("Save snacks"):
-            df.loc[df["Round"] == nx["Round"], "Snacks"] = new_snacks.strip()
-            save_data(df)
-            st.session_state["snacks_saved"] = True
-            st.rerun()
+        with st.form("snacks_form", border=False):
+            new_snacks = st.text_input(
+                "🍊 Who's on snacks?",
+                value=str(nx.get("Snacks", "") or ""),
+                placeholder="e.g. The Smiths",
+            )
+            if st.form_submit_button("Save"):
+                df.loc[df["Round"] == nx["Round"], "Snacks"] = new_snacks.strip()
+                save_data(df)
+                st.session_state["snacks_saved"] = True
+                st.rerun()
 
 # Quick score entry — phone friendly, no sideways scrolling
 with st.expander("⚡ Quick score entry", expanded=True):
